@@ -4,6 +4,7 @@ const axios = require('axios');
 const cors = require('cors');
 const natural = require('natural');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const serverless = require('serverless-http');
 const app = express();
 
 app.use(cors());
@@ -11,6 +12,10 @@ app.use(express.json());
 
 const TEXTRAZOR_API_KEY = process.env.TEXTRAZOR_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+
+// Debug: Log the API keys to verify they're loaded
+console.log('TEXTRAZOR_API_KEY:', TEXTRAZOR_API_KEY ? 'Set' : 'Not Set');
+console.log('GEMINI_API_KEY:', GEMINI_API_KEY ? 'Set' : 'Not Set');
 
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
@@ -94,13 +99,12 @@ app.post('/insert-keyword', async (req, res) => {
     let insertedAt = updatedText.toLowerCase().indexOf(keyword.toLowerCase());
     let keywordLength = keyword.length;
 
-    // Fallback: If keyword isn't inserted, append it manually with hashtags
     const seoRelatedKeywords = ['seo', 'digital marketing', 'keyword', 'optimization', 'search engine'];
     let keywordWithHashtags = keyword;
     if (seoRelatedKeywords.some(k => keyword.toLowerCase().includes(k))) {
       const seoHashtags = ['#SEO', '#DigitalMarketing', '#ContentMarketing', '#SearchEngineOptimization', '#KeywordResearch'];
       const trendyHashtags = ['#MarketingTrends2025', '#GrowYourBusiness', '#SocialMediaMarketing'];
-      const selectedTrendyHashtags = trendyHashtags.slice(0, 2); // Pick 2 trendy hashtags
+      const selectedTrendyHashtags = trendyHashtags.slice(0, 2);
       const allHashtags = [...seoHashtags, ...selectedTrendyHashtags].join(' ');
       keywordWithHashtags = `${keyword} (${allHashtags})`;
     }
@@ -125,8 +129,4 @@ function calculateReadability(text) {
   return Math.round(206.835 - 1.015 * (words / sentences) - 84.6 * (syllables / words));
 }
 
-module.exports = { app, calculateReadability };
-
-if (require.main === module) {
-  app.listen(3000, () => console.log('Server running on port 3000'));
-}
+module.exports.handler = serverless(app);

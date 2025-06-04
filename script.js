@@ -17,7 +17,7 @@ async function analyzeText() {
   document.getElementById('preview').innerText = text;
 
   try {
-    const response = await fetch('http://localhost:3000/analyze', {
+    const response = await fetch('/api/server/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text })
@@ -42,13 +42,11 @@ function displayResults(data) {
   const keywordsDiv = document.getElementById('keywords');
   const previewDiv = document.getElementById('preview');
 
-  // Determine readability color based on score
   let readabilityColor = 'text-gray-500';
   if (data.readability >= 60) readabilityColor = 'text-green-600';
   else if (data.readability >= 30) readabilityColor = 'text-yellow-600';
   else readabilityColor = 'text-red-600';
 
-  // Determine sentiment color based on tone
   let sentimentColor = 'text-gray-500';
   if (data.sentiment.tone === 'Positive') sentimentColor = 'text-green-600';
   else if (data.sentiment.tone === 'Negative') sentimentColor = 'text-red-600';
@@ -85,7 +83,6 @@ function displayResults(data) {
   });
 
   previewDiv.innerHTML = data.updatedText || document.getElementById('inputText').value;
-  // Show Copy to Clipboard button if preview has content
   document.getElementById('copyButton').classList.remove('hidden');
 }
 
@@ -104,28 +101,32 @@ async function insertKeyword(keyword) {
   document.getElementById('preview').innerHTML = 'Inserting keyword...';
 
   try {
-    const response = await fetch('http://localhost:3000/insert-keyword', {
+    console.log('Sending request with:', { text, keyword });
+    const response = await fetch('/api/server/api/insert-keyword', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, keyword })
     });
     if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
+      const errorData = await response.json();
+      throw new Error(errorData.error || `HTTP error! Status: ${response.status}`);
     }
     const data = await response.json();
     const { updatedText, insertedAt, keywordLength } = data;
+
     if (insertedAt !== -1 && keywordLength) {
+      const keywordWithHashtags = updatedText.slice(insertedAt).match(new RegExp(`${keyword}( \\([^)]+\\))?`))?.[0] || keyword;
       const before = updatedText.slice(0, insertedAt);
-      const inserted = updatedText.slice(insertedAt, insertedAt + keywordLength);
-      const after = updatedText.slice(insertedAt + keywordLength);
+      const inserted = keywordWithHashtags;
+      const after = updatedText.slice(insertedAt + inserted.length);
       document.getElementById('preview').innerHTML = `${before}<span class="highlighted bg-yellow-200 px-1 rounded">${inserted}</span>${after}`;
     } else {
       document.getElementById('preview').innerHTML = updatedText;
     }
     document.getElementById('copyButton').classList.remove('hidden');
   } catch (error) {
-    console.error('Error:', error);
-    alert('Failed to insert keyword. Please check the server and try again.');
+    console.error('Error inserting keyword:', error.message);
+    alert(`Failed to insert keyword: ${error.message}`);
     document.getElementById('preview').innerText = text;
     document.getElementById('copyButton').classList.add('hidden');
   } finally {
@@ -147,7 +148,7 @@ function clearText() {
 }
 
 function copyToClipboard() {
-  const previewText = document.getElementById('preview').innerText; // Use innerText to exclude HTML tags
+  const previewText = document.getElementById('preview').innerText;
   navigator.clipboard.writeText(previewText).then(() => {
     const copyButton = document.getElementById('copyButton');
     copyButton.querySelector('span').textContent = 'Copied!';
