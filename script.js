@@ -23,13 +23,14 @@ async function analyzeText() {
       body: JSON.stringify({ text })
     });
     if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
+      const errorData = await response.json();
+      throw new Error(errorData.error || `HTTP error! Status: ${response.status}`);
     }
     const data = await response.json();
     displayResults(data);
   } catch (error) {
-    console.error('Error:', error);
-    alert('Failed to analyze text. Please check the server and try again.');
+    console.error('Error analyzing text:', error.message);
+    alert(`Failed to analyze text: ${error.message}`);
   } finally {
     analyzeButton.querySelector('span').textContent = 'Analyze';
     loadingSpinner.classList.add('hidden');

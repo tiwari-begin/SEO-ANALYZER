@@ -17,6 +17,11 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 console.log('TEXTRAZOR_API_KEY:', TEXTRAZOR_API_KEY ? 'Set' : 'Not Set');
 console.log('GEMINI_API_KEY:', GEMINI_API_KEY ? 'Set' : 'Not Set');
 
+// Health check endpoint to confirm backend is running
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'Backend is running', textrazorKeySet: !!TEXTRAZOR_API_KEY, geminiKeySet: !!GEMINI_API_KEY });
+});
+
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
@@ -24,6 +29,10 @@ app.post('/analyze', async (req, res) => {
   const { text } = req.body;
   if (!text) {
     return res.status(400).json({ error: 'Text is required' });
+  }
+  if (!TEXTRAZOR_API_KEY) {
+    console.error('TEXTRAZOR_API_KEY is not set');
+    return res.status(500).json({ error: 'Server configuration error: TextRazor API key is missing' });
   }
   try {
     const params = new URLSearchParams();
@@ -68,8 +77,8 @@ app.post('/analyze', async (req, res) => {
       updatedText: text
     });
   } catch (error) {
-    console.error('TextRazor Error:', error.response?.data || error.message);
-    res.status(500).json({ error: 'Failed to analyze text' });
+    console.error('TextRazor Error:', error.response?.data || error.message || error);
+    res.status(500).json({ error: 'Failed to analyze text', details: error.response?.data?.error || error.message });
   }
 });
 
@@ -78,7 +87,10 @@ app.post('/insert-keyword', async (req, res) => {
   if (!text || !keyword) {
     return res.status(400).json({ error: 'Text and keyword are required' });
   }
-
+  if (!GEMINI_API_KEY) {
+    console.error('GEMINI_API_KEY is not set');
+    return res.status(500).json({ error: 'Server configuration error: Gemini API key is missing' });
+  }
   try {
     const prompt = `Insert the keyword "${keyword}" into the following text naturally, ensuring grammatical correctness and contextual relevance. The keyword must be inserted at least once. If you cannot find a natural insertion point, append the keyword at the end of the text. If the keyword is SEO-related (e.g., contains "SEO", "marketing", "keyword", "optimization"), append relevant hashtags (e.g., #SEO, #DigitalMarketing) after the keyword in parentheses. Preserve all whitespace, newlines, and formatting in the original text. Return only the modified text without any additional explanation.\n\nText: ${text}`;
 
@@ -117,8 +129,8 @@ app.post('/insert-keyword', async (req, res) => {
 
     res.json({ updatedText, insertedAt, keywordLength });
   } catch (error) {
-    console.error('Gemini API Error:', error.message);
-    res.status(500).json({ error: 'Failed to insert keyword' });
+    console.error('Gemini API Error:', error.message || error);
+    res.status(500).json({ error: 'Failed to insert keyword', details: error.message });
   }
 });
 
