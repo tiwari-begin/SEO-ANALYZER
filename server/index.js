@@ -1,15 +1,19 @@
+require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
 const natural = require('natural');
-const nlp = require('compromise');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
-// Cache for similarity scores to improve performance
-const similarityCache = new Map();
+const TEXTRAZOR_API_KEY = process.env.TEXTRAZOR_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
 app.post('/analyze', async (req, res) => {
   const { text } = req.body;
@@ -22,7 +26,7 @@ app.post('/analyze', async (req, res) => {
     params.append('extractors', 'topics,words');
     const apiResponse = await axios.post('https://api.textrazor.com', params, {
       headers: {
-        'x-textrazor-key': '7db0569552b7fd0aa65c18e404880ab9abc6a352f67d92388ca634db',
+        'x-textrazor-key': TEXTRAZOR_API_KEY,
         'Content-Type': 'application/x-www-form-urlencoded'
       }
     });
@@ -42,7 +46,6 @@ app.post('/analyze', async (req, res) => {
     const readability = calculateReadability(text);
     const suggestions = keywords.length ? `Consider adding keywords: ${keywords.join(', ')}` : 'No suggestions available.';
 
-    // Add Sentiment Analysis
     const sentimentAnalyzer = new natural.SentimentAnalyzer('English', natural.PorterStemmer, 'afinn');
     const tokenizer = new natural.WordTokenizer();
     const tokens = tokenizer.tokenize(text);
@@ -71,133 +74,47 @@ app.post('/insert-keyword', async (req, res) => {
     return res.status(400).json({ error: 'Text and keyword are required' });
   }
 
-  const tokenizer = new natural.WordTokenizer();
-  const distance = natural.JaroWinklerDistance;
-  const words = tokenizer.tokenize(text.replace(/([.,!?])/g, ' $1'));
-  const doc = nlp(text);
-  const candidates = [];
-  const nouns = doc.nouns().out('array');
-  const verbs = doc.verbs().out('array');
-  let taggedWords = words.map(word => {
-    const isNoun = nouns.includes(word);
-    const isVerb = verbs.includes(word);
-    return { value: word, tag: isNoun ? 'noun' : isVerb ? 'verb' : 'unknown' };
-  });
-
-  taggedWords.forEach((taggedWord, index) => {
-    if (['noun', 'verb'].includes(taggedWord.tag) && !/^[.,!?]$/.test(taggedWord.value)) {
-      candidates.push({ ...taggedWord, originalIndex: index });
-    }
-  });
-
   try {
-    const threshold = keyword.length <= 3 ? 0.6 : 0.45;
-    let bestMatch = null;
-    let bestMatchIndex = -1;
-    let bestScore = 0;
-    let insertionPosition = -1;
+    const prompt = `Insert the keyword "${keyword}" into the following text naturally, ensuring grammatical correctness and contextual relevance. The keyword must be inserted at least once. If you cannot find a natural insertion point, append the keyword at the end of the text. If the keyword is SEO-related (e.g., contains "SEO", "marketing", "keyword", "optimization"), append relevant hashtags (e.g., #SEO, #DigitalMarketing) after the keyword in parentheses. Preserve all whitespace, newlines, and formatting in the original text. Return only the modified text without any additional explanation.\n\nText: ${text}`;
 
-    console.log('Tagged words:', taggedWords);
-    console.log('Candidates for matching:', candidates);
-    
-    for (const candidate of candidates) {
-      const word = candidate.value.toLowerCase();
-      const cacheKey = `${word}:${keyword.toLowerCase()}`;
-      let score;
-      if (similarityCache.has(cacheKey)) {
-        score = similarityCache.get(cacheKey);
-      } else {
-        score = distance(word, keyword.toLowerCase());
-        similarityCache.set(cacheKey, score);
+    const result = await model.generateContent({
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: prompt }]
+        }
+      ],
+      generationConfig: {
+        maxOutputTokens: 500,
+        temperature: 0.7
       }
-      console.log(`Comparing "${word}" with "${keyword.toLowerCase()}": Score = ${score}, Tag = ${candidate.tag}`);
-      if (score > bestScore && score > threshold) {
-        bestScore = score;
-        bestMatch = candidate.value;
-        bestMatchIndex = candidate.originalIndex;
-      }
+    });
+
+    let updatedText = result.response.text();
+    let insertedAt = updatedText.toLowerCase().indexOf(keyword.toLowerCase());
+    let keywordLength = keyword.length;
+
+    // Fallback: If keyword isn't inserted, append it manually with hashtags
+    const seoRelatedKeywords = ['seo', 'digital marketing', 'keyword', 'optimization', 'search engine'];
+    let keywordWithHashtags = keyword;
+    if (seoRelatedKeywords.some(k => keyword.toLowerCase().includes(k))) {
+      const seoHashtags = ['#SEO', '#DigitalMarketing', '#ContentMarketing', '#SearchEngineOptimization', '#KeywordResearch'];
+      const trendyHashtags = ['#MarketingTrends2025', '#GrowYourBusiness', '#SocialMediaMarketing'];
+      const selectedTrendyHashtags = trendyHashtags.slice(0, 2); // Pick 2 trendy hashtags
+      const allHashtags = [...seoHashtags, ...selectedTrendyHashtags].join(' ');
+      keywordWithHashtags = `${keyword} (${allHashtags})`;
     }
 
-    let updatedText = text;
-    if (bestMatchIndex !== -1) {
-      console.log(`Best match found: "${bestMatch}" with score ${bestScore}`);
-      const textLower = text.toLowerCase();
-      const bestMatchLower = bestMatch.toLowerCase();
-      let position = -1;
-      let currentIndex = 0;
-      for (let i = 0; i < words.length; i++) {
-        if (i === bestMatchIndex) {
-          const wordInText = textLower.substr(currentIndex);
-          const wordIndex = wordInText.indexOf(bestMatchLower);
-          if (wordIndex !== -1) {
-            position = currentIndex + wordIndex + bestMatch.length;
-            break;
-          }
-        }
-        currentIndex += words[i].length + (text[currentIndex + words[i].length] === ' ' ? 1 : 0);
-      }
-
-      if (position !== -1) {
-        let inQuotes = false;
-        for (let i = 0; i < position; i++) {
-          if (text[i] === '"') inQuotes = !inQuotes;
-        }
-        if (inQuotes) {
-          const closingQuote = text.indexOf('"', position);
-          if (closingQuote !== -1) {
-            position = closingQuote + 1;
-          }
-        }
-        insertionPosition = position + 1;
-        const nextChar = text[position];
-        if (nextChar && /[,.!?]/.test(nextChar)) {
-          updatedText = text.slice(0, position) + ' ' + keyword + text.slice(position);
-        } else {
-          updatedText = text.slice(0, position) + ' ' + keyword + (text[position] ? ' ' : '') + text.slice(position);
-        }
-      } else {
-        console.log('Position not found, falling back to original logic');
-        throw new Error('Best match position not found in text');
-      }
-    } else {
-      console.log('No similar word found, falling back to original logic');
-      const sentences = text.split(/[.!?]/).filter(s => s.trim());
-      if (sentences.length > 0) {
-        const firstSentence = sentences[0].trim();
-        const firstSentenceEnd = text.indexOf(firstSentence) + firstSentence.length;
-        const punctuationMatch = text.slice(firstSentenceEnd).match(/[.!?]/);
-        const insertPoint = punctuationMatch
-          ? firstSentenceEnd + punctuationMatch.index + 1
-          : firstSentenceEnd;
-        insertionPosition = insertPoint + 1;
-        updatedText = text.slice(0, insertPoint) + ' ' + keyword + text.slice(insertPoint);
-      } else {
-        updatedText = text.trim() + (text.trim() ? ' ' : '') + keyword;
-        insertionPosition = text.trim().length + 1;
-      }
+    if (insertedAt === -1) {
+      console.log('Gemini API failed to insert keyword; using fallback mechanism.');
+      updatedText = text + (text.endsWith(' ') || text.endsWith('\n') ? '' : ' ') + keywordWithHashtags;
+      insertedAt = text.length + (text.endsWith(' ') || text.endsWith('\n') ? 0 : 1);
     }
 
-    res.json({ updatedText, insertedAt: insertionPosition, keywordLength: keyword.length });
+    res.json({ updatedText, insertedAt, keywordLength });
   } catch (error) {
-    console.error('NLP Error:', error.message);
-    console.log('Falling back to original logic due to error');
-    let updatedText = text;
-    let insertionPosition = -1;
-    const sentences = text.split(/[.!?]/).filter(s => s.trim());
-    if (sentences.length > 0) {
-      const firstSentence = sentences[0].trim();
-      const firstSentenceEnd = text.indexOf(firstSentence) + firstSentence.length;
-      const punctuationMatch = text.slice(firstSentenceEnd).match(/[.!?]/);
-      const insertPoint = punctuationMatch
-        ? firstSentenceEnd + punctuationMatch.index + 1
-        : firstSentenceEnd;
-      insertionPosition = insertPoint + 1;
-      updatedText = text.slice(0, insertPoint) + ' ' + keyword + text.slice(insertPoint);
-    } else {
-      updatedText = text.trim() + (text.trim() ? ' ' : '') + keyword;
-      insertionPosition = text.trim().length + 1;
-    }
-    res.json({ updatedText, insertedAt: insertionPosition, keywordLength: keyword.length });
+    console.error('Gemini API Error:', error.message);
+    res.status(500).json({ error: 'Failed to insert keyword' });
   }
 });
 
