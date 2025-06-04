@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SEO Analyzer</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6 flex items-center justify-center">
+  <div class="absolute top-4 right-4">
+    <button id="themeToggle" class="p-2 rounded-full bg-gray-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-400" aria-label="Toggle dark mode">
+      <svg id="themeIcon" class="h-6 w-6 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+      </svg>
+    </button>
+  </div>
+
+  <div class="max-w-3xl w-full mx-auto bg-white rounded-xl shadow-lg p-8 transform transition-all duration-300 hover:shadow-xl">
+    <h1 class="text-3xl font-bold text-indigo-700 mb-6 text-center">SEO Analyzer</h1>
+
+    <div class="mb-6">
+      <label for="inputText" class="block text-sm font-medium text-gray-700 mb-2">Enter Your Content</label>
+      <textarea
+        id="inputText"
+        class="w-full h-48 border border-gray-300 rounded-lg p-4 text-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200 resize-none"
+        placeholder="Enter your blog post, tweet, or caption..."
+        aria-label="Enter your blog post, tweet, or caption for SEO analysis"
+      ></textarea>
+      <p class="text-xs text-gray-500 mt-2">For best results, enter at least 50 words.</p>
+      <p id="wordCount" class="text-xs text-gray-500 mt-2">Words: 0</p>
+    </div>
+
+    <div class="flex space-x-4 justify-center mb-6">
+      <button
+        id="analyzeButton"
+        onclick="analyzeText()"
+        class="relative bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-300 transition duration-200 flex items-center space-x-2"
+        aria-label="Analyze the entered text for SEO"
+      >
+        <span>Analyze</span>
+        <svg id="loadingSpinner" class="hidden animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+        </svg>
+      </button>
+      <button
+        id="clearButton"
+        onclick="clearText()"
+        class="bg-gray-300 text-gray-700 px-6 py-3 rounded-lg font-semibold hover:bg-gray-400 focus:outline-none focus:ring-4 focus:ring-gray-200 transition duration-200"
+        aria-label="Clear the entered text"
+      >
+        Clear
+      </button>
+    </div>
+
+    <div id="results" class="mt-8 hidden">
+      <h2 class="text-2xl font-semibold text-indigo-600 mb-4">SEO Analysis Results</h2>
+      <div id="metrics" class="bg-indigo-50 p-4 rounded-lg mb-6 text-gray-800"></div>
+      <h2 class="text-2xl font-semibold text-indigo-600 mb-4">Recommended Keywords</h2>
+      <div id="keywords" class="flex flex-wrap gap-3 mb-6"></div>
+    </div>
+
+    <h2 class="text-2xl font-semibold text-indigo-600 mt-8 mb-4 flex justify-between items-center">
+      Text Preview
+      <button
+        id="copyButton"
+        onclick="copyToClipboard()"
+        class="hidden bg-gray-200 text-gray-700 px-4 py-1 rounded-lg text-sm font-medium hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 transition duration-200 flex items-center space-x-1"
+        aria-label="Copy updated text to clipboard"
+      >
+        <span>Copy Text</span>
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-2M8 5V3a2 2 0 012-2h4a2 2 0 012 2v2M8 5h8" />
+        </svg>
+      </button>
+    </h2>
+    <div id="preview" class="border border-gray-200 p-4 rounded-lg bg-white text-gray-800 whitespace-pre-wrap shadow-inner"></div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
