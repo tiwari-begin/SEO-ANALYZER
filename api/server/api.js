@@ -33,7 +33,7 @@ app.get('/health', (req, res) => {
   });
 });
 export const config = {
-  maxDuration: 300, // increase from default 10s to 300s (5 minutes)
+  maxDuration: 60, // increase from default 10s to 300s (5 minutes)
 };
 
 // Initialize Gemini AI for keyword insertion
