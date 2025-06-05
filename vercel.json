@@ -1,22 +1,23 @@
-{"version": 2,
-"builds": [
 {
-"src": "api/server/api.js",
-"use": "@vercel/node"
-},
-{
-"src": "index.html",
-"use": "@vercel/static"
-}
-],
-"routes": [
-{
-"src": "/api/server/api/(.)",
-"dest": "/api/server/api.js"
-},
-{
-"src": "/(.)",
-"dest": "/index.html"
-}
-]
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/server/api.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(analyze|insert-keyword|health)",
+      "dest": "/api/server/api.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/public/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/public/index.html"
+    }
+  ]
 }

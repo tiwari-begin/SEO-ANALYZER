@@ -1,50 +1,73 @@
+/* Styles for keyword buttons */
 #keywords li {
   display: flex;
   align-items: center;
   margin: 0.5rem 0;
 }
+
+/* Style for the insert keyword buttons */
 .insert-btn {
   margin-left: 1rem;
   padding: 0.25rem 0.5rem;
-  background-color: #28a745;
+  background-color: #28a745; /* Green background */
   color: white;
   border-radius: 0.25rem;
 }
+
+/* Hover effect for insert buttons */
 .insert-btn:hover {
-  background-color: #218838;
+  background-color: #218838; /* Darker green on hover */
 }
+
+/* Disabled state for insert buttons */
 .insert-btn:disabled {
-  background-color: #6c757d;
+  background-color: #6c757d; /* Gray when disabled */
   cursor: not-allowed;
 }
+
+/* Highlight style for inserted keywords in preview */
 .highlighted {
-  background-color: #ffeb3b;
+  background-color: #ffeb3b; /* Yellow highlight */
   padding: 0 0.2rem;
   border-radius: 0.2rem;
 }
+
+/* Dark mode styles */
 .dark {
-  background: linear-gradient(to bottom right, #1e3a8a, #1e40af);
+  background: linear-gradient(to bottom right, #1e3a8a, #1e40af); /* Gradient background */
 }
+
+/* Dark mode container styles */
 .dark .max-w-3xl {
-  background-color: #1f2937;
-  color: #f3f4f6;
+  background-color: #1f2937; /* Dark background */
+  color: #f3f4f6; /* Light text */
 }
+
+/* Dark mode textarea styles */
 .dark #inputText {
-  background-color: #374151;
-  color: #f3f4f6;
-  border-color: #4b5563;
+  background-color: #374151; /* Darker background */
+  color: #f3f4f6; /* Light text */
+  border-color: #4b5563; /* Border color */
 }
+
+/* Dark mode textarea focus styles */
 .dark #inputText:focus {
-  border-color: #6366f1;
+  border-color: #6366f1; /* Indigo border */
   ring-color: #6366f1;
 }
+
+/* Dark mode metrics and preview styles */
 .dark #metrics, .dark #preview {
-  background-color: #374151;
-  color: #f3f4f6;
+  background-color: #374151; /* Dark background */
+  color: #f3f4f6; /* Light text */
 }
+
+/* Dark mode heading styles */
 .dark h1, .dark h2 {
-  color: #a5b4fc;
+  color: #a5b4fc; /* Light indigo text */
 }
+
+/* Dark mode progress bar background */
 .dark .bg-gray-200 {
-  background-color: #4b5563;
+  background-color: #4b5563; /* Darker gray */
 }

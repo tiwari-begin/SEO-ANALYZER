@@ -4,80 +4,75 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SEO Analyzer</title>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <!-- Load Tailwind CSS for styling -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Load Feather Icons for UI icons -->
+  <script src="https://unpkg.com/feather-icons"></script>
+  <!-- Load local styles -->
   <link rel="stylesheet" href="styles.css">
 </head>
-<body class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6 flex items-center justify-center">
-  <div class="absolute top-4 right-4">
-    <button id="themeToggle" class="p-2 rounded-full bg-gray-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-400" aria-label="Toggle dark mode">
-      <svg id="themeIcon" class="h-6 w-6 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-      </svg>
-    </button>
-  </div>
+<body class="bg-gradient-to-br from-blue-100 to-indigo-200 min-h-screen flex items-center justify-center p-4 transition duration-300">
+  <!-- Main container for the app -->
+  <div class="max-w-3xl w-full bg-white rounded-lg shadow-lg p-6 transition duration-300">
+    <!-- Header with title and theme toggle -->
+    <div class="flex justify-between items-center mb-6">
+      <h1 class="text-2xl font-bold text-indigo-700">SEO Analyzer</h1>
+      <button id="themeToggle" class="text-gray-600 hover:text-gray-800 focus:outline-none">
+        <svg id="themeIcon" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+        </svg>
+      </button>
+    </div>
 
-  <div class="max-w-3xl w-full mx-auto bg-white rounded-xl shadow-lg p-8 transform transition-all duration-300 hover:shadow-xl">
-    <h1 class="text-3xl font-bold text-indigo-700 mb-6 text-center">SEO Analyzer</h1>
-
+    <!-- Input section -->
     <div class="mb-6">
       <label for="inputText" class="block text-sm font-medium text-gray-700 mb-2">Enter Your Content</label>
-      <textarea
-        id="inputText"
-        class="w-full h-48 border border-gray-300 rounded-lg p-4 text-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200 resize-none"
-        placeholder="Enter your blog post, tweet, or caption..."
-        aria-label="Enter your blog post, tweet, or caption for SEO analysis"
-      ></textarea>
-      <p class="text-xs text-gray-500 mt-2">For best results, enter at least 50 words.</p>
-      <p id="wordCount" class="text-xs text-gray-500 mt-2">Words: 0</p>
+      <textarea id="inputText" rows="5" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 transition duration-200" placeholder="For best results, enter at least 50 words."></textarea>
+      <p id="wordCount" class="text-sm text-gray-500 mt-1">Words: 0</p>
     </div>
 
-    <div class="flex space-x-4 justify-center mb-6">
-      <button
-        id="analyzeButton"
-        onclick="analyzeText()"
-        class="relative bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-300 transition duration-200 flex items-center space-x-2"
-        aria-label="Analyze the entered text for SEO"
-      >
+    <!-- Buttons for analyzing and clearing text -->
+    <div class="flex justify-between mb-6">
+      <button id="analyzeButton" class="flex items-center bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition duration-200">
         <span>Analyze</span>
-        <svg id="loadingSpinner" class="hidden animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+        <svg id="loadingSpinner" class="w-5 h-5 ml-2 hidden animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v4m0 8v4m8-8h-4m-8 0H4"></path>
         </svg>
       </button>
-      <button
-        id="clearButton"
-        onclick="clearText()"
-        class="bg-gray-300 text-gray-700 px-6 py-3 rounded-lg font-semibold hover:bg-gray-400 focus:outline-none focus:ring-4 focus:ring-gray-200 transition duration-200"
-        aria-label="Clear the entered text"
-      >
-        Clear
-      </button>
+      <button id="clearButton" class="bg-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-400 transition duration-200">Clear</button>
     </div>
 
-    <div id="results" class="mt-8 hidden">
-      <h2 class="text-2xl font-semibold text-indigo-600 mb-4">SEO Analysis Results</h2>
-      <div id="metrics" class="bg-indigo-50 p-4 rounded-lg mb-6 text-gray-800"></div>
-      <h2 class="text-2xl font-semibold text-indigo-600 mb-4">Recommended Keywords</h2>
-      <div id="keywords" class="flex flex-wrap gap-3 mb-6"></div>
-    </div>
+    <!-- Results section (hidden initially) -->
+    <div id="results" class="hidden">
+      <!-- Metrics section -->
+      <div class="mb-6">
+        <h2 class="text-lg font-semibold text-indigo-700 mb-2">SEO Analysis Results</h2>
+        <div id="metrics" class="bg-gray-50 p-4 rounded-lg"></div>
+      </div>
 
-    <h2 class="text-2xl font-semibold text-indigo-600 mt-8 mb-4 flex justify-between items-center">
-      Text Preview
-      <button
-        id="copyButton"
-        onclick="copyToClipboard()"
-        class="hidden bg-gray-200 text-gray-700 px-4 py-1 rounded-lg text-sm font-medium hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 transition duration-200 flex items-center space-x-1"
-        aria-label="Copy updated text to clipboard"
-      >
-        <span>Copy Text</span>
-        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-2M8 5V3a2 2 0 012-2h4a2 2 0 012 2v2M8 5h8" />
-        </svg>
-      </button>
-    </h2>
-    <div id="preview" class="border border-gray-200 p-4 rounded-lg bg-white text-gray-800 whitespace-pre-wrap shadow-inner"></div>
+      <!-- Keywords section -->
+      <div class="mb-6">
+        <h2 class="text-lg font-semibold text-indigo-700 mb-2">Recommended Keywords</h2>
+        <div id="keywords" class="flex flex-wrap gap-2"></div>
+      </div>
+
+      <!-- Preview section -->
+      <div>
+        <h2 class="text-lg font-semibold text-indigo-700 mb-2">Text Preview</h2>
+        <div id="preview" class="bg-gray-50 p-4 rounded-lg mb-4"></div>
+        <button id="copyButton" class="hidden flex items-center bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400 transition duration-200">
+          <span>Copy Text</span>
+          <i data-feather="copy" class="w-5 h-5 ml-2"></i>
+        </button>
+      </div>
+    </div>
   </div>
 
+  <!-- Load the frontend script -->
   <script src="script.js"></script>
+  <!-- Initialize Feather Icons -->
+  <script>
+    feather.replace();
+  </script>
 </body>
 </html>
