@@ -1,30 +1,33 @@
-// Load environment variables from .env file for local development
-require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const dotenv = require('dotenv');
+const axios = require('axios');
+const natural = require('natural');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+const serverless = require('serverless-http');
 
-// Import required modules
-const express = require('express'); // Framework for building the API
-const axios = require('axios'); // For making HTTP requests to TextRazor API
-const cors = require('cors'); // To handle CORS for cross-origin requests
-const natural = require('natural'); // For sentiment analysis and tokenization
-const { GoogleGenerativeAI } = require('@google/generative-ai'); // For keyword insertion using Gemini API
-const serverless = require('serverless-http'); // For Vercel serverless deployment
-
-// Initialize Express app
+// Load environment variables
+dotenv.config();
 const app = express();
 
-// Middleware setup
-app.use(cors()); // Enable CORS for all routes
-app.use(express.json()); // Parse incoming JSON requests
+// Middleware
+app.use(cors());
+app.use(express.json());
 
-// Load API keys from environment variables
-const TEXTRAZOR_API_KEY = process.env.TEXTRAZOR_API_KEY; // TextRazor API key for keyword extraction
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY; // Gemini API key for keyword insertion
+// Initialize APIs
+const TEXTRAZOR_API_KEY = process.env.TEXTRAZOR_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
-// Debug: Log whether API keys are loaded (helps in debugging environment issues)
-console.log('TEXTRAZOR_API_KEY:', TEXTRAZOR_API_KEY ? 'Set' : 'Not Set');
-console.log('GEMINI_API_KEY:', GEMINI_API_KEY ? 'Set' : 'Not Set');
+// Timeout helper function
+const timeoutPromise = (promise, time) => {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Request timed out')), time))
+  ]);
+};
 
-// Health check endpoint to verify backend is running and API keys are set
+// Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'Backend is running',
@@ -33,244 +36,113 @@ app.get('/health', (req, res) => {
   });
 });
 
-
-// Initialize Gemini AI for keyword insertion
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-
-// POST endpoint to analyze text for SEO metrics
+// Analyze endpoint
 app.post('/analyze', async (req, res) => {
+  const { text } = req.body;
+  if (!text) {
+    return res.status(400).json({ error: 'Text is required' });
+  }
+
   try {
-    // Log the incoming request for debugging
-    console.log('Received /analyze request with body:', req.body);
+    // Parallelize TextRazor and Gemini API calls with timeouts
+    const [textrazorResponse, geminiResult] = await Promise.all([
+      timeoutPromise(
+        axios.post(
+          'https://api.textrazor.com',
+          `text=${encodeURIComponent(text)}&extractors=entities,topics`,
+          {
+            headers: {
+              'X-TextRazor-Key': TEXTRAZOR_API_KEY,
+              'Content-Type': 'application/x-www-form-urlencoded'
+            }
+          }
+        ),
+        20000 // 20-second timeout for TextRazor
+      ).catch(err => {
+        console.error('TextRazor timeout or error:', err.message);
+        return { data: { response: { entities: [] } } }; // Fallback response
+      }),
+      timeoutPromise(
+        (async () => {
+          const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+          const prompt = `Analyze the sentiment of the following text and return a JSON object with "tone" (Positive, Negative, or Neutral) and a "suggestion" for improvement: "${text}"`;
+          const result = await model.generateContent(prompt);
+          return JSON.parse(result.response.text());
+        })(),
+        20000 // 20-second timeout for Gemini
+      ).catch(err => {
+        console.error('Gemini timeout or error:', err.message);
+        return { tone: 'Neutral', suggestion: 'Unable to analyze sentiment due to timeout.' }; // Fallback response
+      })
+    ]);
 
-    // Extract text from request body
-    const { text } = req.body;
+    // Process TextRazor response
+    const keywords = textrazorResponse.data.response.entities
+      ? textrazorResponse.data.response.entities.map(entity => entity.entityId)
+      : [];
 
-    // Validate that text is provided
-    if (!text) {
-      console.log('Text is missing in request body');
-      return res.status(400).json({ error: 'Text is required' });
-    }
+    // Readability calculation using Flesch-Kincaid (via natural)
+    const tokenizer = new natural.SentenceTokenizer();
+    const sentences = tokenizer.tokenize(text);
+    const wordTokenizer = new natural.WordTokenizer();
+    const words = wordTokenizer.tokenize(text);
+    const syllables = words.reduce((acc, word) => acc + (natural.SyllableCounter(word) || 1), 0);
 
-    // Check if TextRazor API key is set
-    if (!TEXTRAZOR_API_KEY) {
-      console.error('TEXTRAZOR_API_KEY is not set');
-      return res.status(500).json({ error: 'Server configuration error: TextRazor API key is missing' });
-    }
+    const readability = 206.835 - 1.015 * (words.length / sentences.length) - 84.6 * (syllables / words.length);
 
-    // Initialize keywords array
-    let keywords = [];
+    // Process Gemini response
+    const sentiment = geminiResult;
 
-    // Try to extract keywords using TextRazor API
-    try {
-      // Prepare parameters for TextRazor API request
-      const params = new URLSearchParams();
-      params.append('text', text);
-      params.append('extractors', 'topics,words'); // Extract topics and words
+    // Suggestions
+    const suggestions = keywords.length
+      ? `Consider adding keywords: ${keywords.join(', ')}`
+      : 'No keywords extracted. Consider simplifying the text.';
 
-      console.log('Sending request to TextRazor API');
-      const apiResponse = await axios.post('https://api.textrazor.com', params, {
-        headers: {
-          'x-textrazor-key': TEXTRAZOR_API_KEY,
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        timeout: 6000 // 6-second timeout to prevent Vercel timeout issues
-      });
-
-      // Log the TextRazor response for debugging
-      console.log('TextRazor Response:', JSON.stringify(apiResponse.data, null, 2));
-
-      // Extract topics as keywords
-      keywords = apiResponse.data.response.topics?.map(t => t.label) || [];
-
-      // Fallback: If no topics, extract nouns (NN/NNP) from sentences
-      if (!keywords.length && apiResponse.data.response.sentences) {
-        const stopWords = new Set(['this', 'is', 'a', 'an', 'the', 'about', 'in', 'on', 'at', 'to']);
-        const words = apiResponse.data.response.sentences.flatMap(sentence => sentence.words);
-        keywords = words
-          .filter(word => 
-            (word.partOfSpeech === 'NN' || word.partOfSpeech === 'NNP') && 
-            !stopWords.has(word.lemma.toLowerCase())
-          )
-          .map(word => word.token)
-          .filter((value, index, self) => self.indexOf(value) === index); // Remove duplicates
-      }
-    } catch (error) {
-      // Log TextRazor API errors
-      console.error('TextRazor Error:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-        stack: error.stack
-      });
-
-      // Fallback: Manual keyword extraction if TextRazor fails
-      console.log('Falling back to manual keyword extraction');
-      const stopWords = new Set(['this', 'is', 'a', 'an', 'the', 'about', 'in', 'on', 'at', 'to']);
-      keywords = text
-        .split(/\s+/)
-        .filter(word => word.length > 3 && !stopWords.has(word.toLowerCase()))
-        .slice(0, 5); // Take up to 5 keywords
-    }
-
-    // Calculate readability using Flesch-Kincaid formula
-    console.log('Calculating readability');
-    const readability = calculateReadability(text);
-
-    // Generate suggestions based on extracted keywords
-    const suggestions = keywords.length ? `Consider adding keywords: ${keywords.join(', ')}` : 'No suggestions available.';
-
-    // Perform sentiment analysis using natural library
-    console.log('Performing sentiment analysis');
-    const sentimentAnalyzer = new natural.SentimentAnalyzer('English', natural.PorterStemmer, 'afinn');
-    const tokenizer = new natural.WordTokenizer();
-    const tokens = tokenizer.tokenize(text);
-    const sentimentScore = sentimentAnalyzer.getSentiment(tokens);
-    let sentimentTone = 'Neutral';
-    if (sentimentScore > 0) sentimentTone = 'Positive';
-    else if (sentimentScore < 0) sentimentTone = 'Negative';
-    const sentimentSuggestion = sentimentScore < 0 ? 'Consider using more positive language to improve engagement.' : 'Your tone is engaging!';
-
-    // Log the response before sending
-    console.log('Sending response:', {
-      keywords: keywords.slice(0, 5),
-      readability,
-      suggestions,
-      sentiment: { score: sentimentScore, tone: sentimentTone, suggestion: sentimentSuggestion },
-      updatedText: text
-    });
-
-    // Send the analysis results
     res.status(200).json({
-      keywords: keywords.slice(0, 5),
-      readability,
+      keywords,
+      readability: Math.round(readability),
       suggestions,
-      sentiment: { score: sentimentScore, tone: sentimentTone, suggestion: sentimentSuggestion },
+      sentiment,
       updatedText: text
     });
   } catch (error) {
-    // Catch any unexpected errors in the endpoint
-    console.error('Unexpected error in /analyze:', {
-      message: error.message,
-      stack: error.stack
-    });
-    res.status(500).json({
-      error: 'Failed to analyze text',
-      details: error.message || 'Unknown error'
-    });
+    console.error('Error in /analyze:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// POST endpoint to insert a keyword into the text using Gemini API
+// Insert keyword endpoint
 app.post('/insert-keyword', async (req, res) => {
+  const { text, keyword } = req.body;
+  if (!text || !keyword) {
+    return res.status(400).json({ error: 'Text and keyword are required' });
+  }
+
   try {
-    // Log the incoming request for debugging
-    console.log('Received /insert-keyword request with body:', req.body);
-
-    // Extract text and keyword from request body
-    const { text, keyword } = req.body;
-
-    // Validate that both text and keyword are provided
-    if (!text || !keyword) {
-      console.log('Text or keyword missing in request body');
-      return res.status(400).json({ error: 'Text and keyword are required' });
-    }
-
-    // Check if Gemini API key is set
-    if (!GEMINI_API_KEY) {
-      console.error('GEMINI_API_KEY is not set');
-      return res.status(500).json({ error: 'Server configuration error: Gemini API key is missing' });
-    }
-
-    // Create a prompt for Gemini API to insert the keyword naturally
-    const prompt = `Insert the keyword "${keyword}" into the following text naturally, ensuring grammatical correctness and contextual relevance. The keyword must be inserted at least once. If you cannot find a natural insertion point, append the keyword at the end of the text. If the keyword is SEO-related (e.g., contains "SEO", "marketing", "keyword", "optimization"), append relevant hashtags (e.g., #SEO, #DigitalMarketing) after the keyword in parentheses. Preserve all whitespace, newlines, and formatting in the original text. Return only the modified text without any additional explanation.\n\nText: ${text}`;
-
-    console.log('Sending request to Gemini API');
-    const result = await model.generateContent({
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: prompt }]
-        }
-      ],
-      generationConfig: {
-        maxOutputTokens: 500,
-        temperature: 0.7 // Control creativity of the response
-      }
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+    const prompt = `Insert the keyword "${keyword}" into the following text naturally, and append relevant hashtags (e.g., #SEO #Keyword) at the end of the text. Return the updated text: "${text}"`;
+    const result = await timeoutPromise(
+      model.generateContent(prompt),
+      20000 // 20-second timeout
+    ).catch(err => {
+      console.error('Gemini timeout or error in /insert-keyword:', err.message);
+      return { response: { text: `${text} (Keyword "${keyword}" could not be inserted due to timeout.) #SEO #${keyword}` } };
     });
 
-    // Extract the updated text from Gemini response
-    let updatedText = result.response.text();
-    let insertedAt = updatedText.toLowerCase().indexOf(keyword.toLowerCase());
-    let keywordLength = keyword.length;
+    const updatedText = result.response.text();
+    const insertedAt = updatedText.indexOf(keyword);
+    const keywordLength = keyword.length;
 
-    // Add hashtags if the keyword is SEO-related
-    const seoRelatedKeywords = ['seo', 'digital marketing', 'keyword', 'optimization', 'search engine'];
-    let keywordWithHashtags = keyword;
-    if (seoRelatedKeywords.some(k => keyword.toLowerCase().includes(k))) {
-      const seoHashtags = ['#SEO', '#DigitalMarketing', '#ContentMarketing', '#SearchEngineOptimization', '#KeywordResearch'];
-      const trendyHashtags = ['#MarketingTrends2025', '#GrowYourBusiness', '#SocialMediaMarketing'];
-      const selectedTrendyHashtags = trendyHashtags.slice(0, 2);
-      const allHashtags = [...seoHashtags, ...selectedTrendyHashtags].join(' ');
-      keywordWithHashtags = `${keyword} (${allHashtags})`;
-    }
-
-    // Fallback: If Gemini fails to insert the keyword, append it manually
-    if (insertedAt === -1) {
-      console.log('Gemini API failed to insert keyword; using fallback mechanism.');
-      updatedText = text + (text.endsWith(' ') || text.endsWith('\n') ? '' : ' ') + keywordWithHashtags;
-      insertedAt = text.length + (text.endsWith(' ') || text.endsWith('\n') ? 0 : 1);
-    }
-
-    // Log the response before sending
-    console.log('Sending response:', { updatedText, insertedAt, keywordLength });
-
-    // Send the updated text with insertion details
-    res.status(200).json({ updatedText, insertedAt, keywordLength });
+    res.status(200).json({
+      updatedText,
+      insertedAt,
+      keywordLength
+    });
   } catch (error) {
-    // Catch any unexpected errors in the endpoint
-    console.error('Unexpected error in /insert-keyword:', {
-      message: error.message,
-      stack: error.stack
-    });
-    res.status(500).json({
-      error: 'Failed to insert keyword',
-      details: error.message || 'Unknown error'
-    });
+    console.error('Error in /insert-keyword:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// Function to calculate readability using Flesch-Kincaid formula
-function calculateReadability(text) {
-  const words = text.split(/\s+/).length; // Count words
-  const sentences = text.split(/[.!?]/).length || 1; // Count sentences, default to 1
-  const syllables = text.split(/[aeiouy]+/i).length; // Count syllables
-  return Math.round(206.835 - 1.015 * (words / sentences) - 84.6 * (syllables / words)); // Flesch-Kincaid formula
-}
-
-// Global error handler for uncaught errors
-app.use((err, req, res, next) => {
-  console.error('Unhandled Error:', {
-    message: err.message,
-    stack: err.stack,
-    path: req.path
-  });
-  res.status(500).json({
-    error: 'Internal server error',
-    details: err.message || 'Unknown error'
-  });
-});
-
-// Export for Vercel serverless deployment
+// Export the app for Vercel
 module.exports = serverless(app);
-
-
-
-// For local development, start the Express server
-if (process.env.NODE_ENV !== 'production') {
-  const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => {
-    console.log(`Server running locally on http://localhost:${PORT}`);
-  });
-}
