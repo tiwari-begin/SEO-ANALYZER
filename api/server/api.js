@@ -262,7 +262,8 @@ app.use((err, req, res, next) => {
 });
 
 // Export for Vercel serverless deployment
-export default serverless(app);
+module.exports = serverless(app);
+
 
 
 // For local development, start the Express server
