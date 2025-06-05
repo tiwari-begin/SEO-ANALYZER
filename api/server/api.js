@@ -262,7 +262,8 @@ app.use((err, req, res, next) => {
 });
 
 // Export for Vercel serverless deployment
-module.exports.handler = serverless(app);
+export default serverless(app);
+
 
 // For local development, start the Express server
 if (process.env.NODE_ENV !== 'production') {
