@@ -32,6 +32,9 @@ app.get('/health', (req, res) => {
     geminiKeySet: !!GEMINI_API_KEY
   });
 });
+export const config = {
+  maxDuration: 300, // increase from default 10s to 300s (5 minutes)
+};
 
 // Initialize Gemini AI for keyword insertion
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
